@@ -10,6 +10,7 @@ library(gridExtra)
 
 #Source functions
 source("fun/TB.Basic.R")
+source("fun/scale_up.R")
 
 
 # Model Parameters
@@ -28,7 +29,8 @@ imm      <- 0.5             # Infectiousness decline (partial immunity)
 relapse  <- 0.0032           # Relapse rate
 
 
-t.intervention = 400      # ??
+t.intervention <- 400      # ??
+t.scale        <- 3        # Scaling up time
 
 # Initial Conditions
 N <- 1                  # ??
@@ -77,21 +79,32 @@ plot(time, rate.inc, col='blue',type='l',ylim = c(0,max(rate.inc)),
 ## Simulation 2
 # An Intervention simulating introduction of treatment
 
-params2 <- params
-params2["selfcure"]<-1/(T.durat*0.01)
-        
-times2  = seq(t.intervention, t.intervention+25 , by=1)
-# Starting conditions
-xstart2 <- c(U = tail(out$U,1), 
-             L = tail(out$L,1),  
-             I = tail(out$I,1), 
-             R = tail(out$R,1),
-             Incidence= tail(out$Incidence,1),
-             Irecent= tail(out$Irecent,1),  
-             Iremote= tail(out$Iremote,1)) 
+# Prepare for new simulation
+sfin       <- out     
+params_new <- params
+params_old <- params
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+t.interv   <- c(times_new[2], times_new[2]+t.scale)
 
-out2 <- as.data.frame(ode(y = xstart2, times = times2, 
-                          func = TB.Basic, parms = params2))  # ??
+# Change parameters for intervention
+params_new["selfcure"]<-1/(T.durat*0.5)
+
+# Starting conditions
+xstart <- c(U = tail(sfin$U,1), 
+             L = tail(sfin$L,1),  
+             I = tail(sfin$I,1), 
+             R = tail(sfin$R,1),
+             Incidence= tail(sfin$Incidence,1),
+             Irecent= tail(sfin$Irecent,1),  
+             Iremote= tail(sfin$Iremote,1)) 
+
+
+#Create function handle
+fx<-TB.Basic
+scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
+
+out2 <- as.data.frame(ode(y = xstart, times = times_new, 
+                          func = scalefx, parms = params_new))  # ??
 
 N <- out2$U+out2$L+out2$I+out2$R  
 
@@ -105,21 +118,22 @@ plot(time2, rate.inc2, col='blue',type='l',ylim = c(0,max(rate.inc2)),
 ## Simulation 3
 # An Intervention simulating transm reduction
 
-params3 <- params2
-params3["beta"] <-beta*0
+# Prepare for new simulation
+params_new <- params_new
+params_old <- params
 
-times3  = seq(t.intervention, t.intervention+25 , by=1)
-# Starting conditions
-xstart3 <- c(U = tail(out2$U,1), 
-             L = tail(out2$L,1),  
-             I = tail(out2$I,1), 
-             R = tail(out2$R,1),
-             Incidence= tail(out2$Incidence,1),
-             Irecent= tail(out2$Irecent,1),  
-             Iremote= tail(out2$Iremote,1)) 
 
-out3 <- as.data.frame(ode(y = xstart3, times = times3, 
-                          func = TB.Basic, parms = params3))  # ??
+# Change parameters for intervention
+params_new["beta"] <-beta*0
+
+
+# Create function handle
+fx<-TB.Basic
+scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params_old,fx)
+
+
+out3 <- as.data.frame(ode(y = xstart, times = times_new, 
+                          func = scalefx, parms = params_new))  # ??
 
 N <- out3$U+out3$L+out3$I+out3$R  
 
@@ -133,21 +147,23 @@ plot(time3, rate.inc3, col='blue',type='l',ylim = c(0,max(rate.inc3)),
 ## Simulation 4
 # An Intervention simulating LTBI treatment
 
-params4 <- params3
-params4["phi"] <-  0.01*(1/T.lat) 
+# Prepare for new simulation
+params_new <- params_new
+params_old <- params
 
-times4  = seq(t.intervention, t.intervention+25 , by=1)
-# Starting conditions
-xstart4 <- c(U = tail(out2$U,1), 
-             L = tail(out2$L,1),  
-             I = tail(out2$I,1), 
-             R = tail(out2$R,1),
-             Incidence= tail(out2$Incidence,1),
-             Irecent= tail(out2$Irecent,1),  
-             Iremote= tail(out2$Iremote,1)) 
 
-out4 <- as.data.frame(ode(y = xstart4, times = times4, 
-                          func = TB.Basic, parms = params4))  # ??
+# Change parameters for intervention
+params_new["phi"] <-  0.01*(1/T.lat) 
+
+
+
+# Create function handle
+fx<-TB.Basic
+scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params_old,fx)
+
+
+out4 <- as.data.frame(ode(y = xstart, times = times_new, 
+                          func = scalefx, parms = params_new))  # ??
 
 N <- out4$U+out4$L+out4$I+out4$R  
 
@@ -157,32 +173,31 @@ plot(time4, rate.inc4, col='blue',type='l',ylim = c(0,max(rate.inc4)),
      xlab ='Years', ylab = 'TB Incidence x 100K')
 
 ########################################################################
-############################## Plot all
 ## Counterfactual
 
-times0  = seq(t.intervention, t.intervention+25 , by=1)
-# Starting conditions
-xstart0 <- c(U = tail(out$U,1), 
-             L = tail(out$L,1),  
-             I = tail(out$I,1), 
-             R = tail(out$R,1),
-             Incidence= tail(out$Incidence,1),
-             Irecent= tail(out$Irecent,1),  
-             Iremote= tail(out$Iremote,1)) 
+# Prepare for new simulation
+params_new <- params
+params_old <- params
 
-out0 <- as.data.frame(ode(y = xstart0, times = times0, 
-                          func = TB.Basic, parms = params))  # ??
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+
+
+out0 <- as.data.frame(ode(y = xstart, times = times_new, 
+                          func = TB.Basic, parms = params_new))  # ??
 
 N <- out0$U+out0$L+out0$I+out0$R  
 rate.inc0<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
 
 
+############################################
+############################## Plot all
 
 plot(time2, rate.inc0, col='blue',type='l',ylim = c(0,max(rate.inc0)),
      xlab ='Years', ylab = 'TB Incidence x 100K')
 lines(time2, rate.inc2, col='black')
 lines(time3, rate.inc3, col='red')
 lines(time4, rate.inc4, col='green')
+
 
 
 
