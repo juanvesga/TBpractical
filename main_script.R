@@ -7,6 +7,7 @@ rm(list=ls())
 library(deSolve)
 ## Warning: package 'deSolve' was built under R version 3.4.4
 library(gridExtra)
+library(ggplot2)
 
 #Source functions
 source("fun/TB.Basic.R")
@@ -192,13 +193,36 @@ rate.inc0<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
 ############################################
 ############################## Plot all
 
-plot(time2, rate.inc0, col='blue',type='l',ylim = c(0,max(rate.inc0)),
-     xlab ='Years', ylab = 'TB Incidence x 100K')
-lines(time2, rate.inc2, col='black')
-lines(time3, rate.inc3, col='red')
-lines(time4, rate.inc4, col='green')
+Years<-time2+1617
+
+allruns<-data.frame(Years , rate.inc0, rate.inc2, rate.inc3, rate.inc4)
+
+sz<-1.2
+p<- ggplot(data=allruns, mapping = aes(x=Years, y=value))
+
+p1<-p + 
+  geom_line(aes(y=rate.inc0, colour="Baseline"),  size=sz)+
+  geom_line(aes(y=rate.inc2, colour="Treatment"),  size=sz)+
+  geom_line(aes(y=rate.inc3, colour="Transmission"),  size=sz)+
+  geom_line(aes(y=rate.inc4, colour="LTBI"), size=sz)+
+  scale_colour_manual("", 
+                      values = c("Baseline"="indianred2", "Treatment"="yellow3", 
+                                 "Transmission"="springgreen4", "LTBI"="royalblue")) +
+  geom_hline(yintercept=rate.inc0[1]*0.1, linetype="dashed", color = "black") +
+    ylim(0,max(rate.inc0))+
+  ggtitle ('TB Interventions') +
+  theme_bw() + ylab('Rate per 100,000')
+  
+ grid.arrange(p1, ncol=1)
 
 
+  
+# plot(time2, rate.inc0, col='blue',type='l',ylim = c(0,max(rate.inc0)),
+#      xlab ='Years', ylab = 'TB Incidence x 100K')
+# lines(time2, rate.inc2, col='black')
+# lines(time3, rate.inc3, col='red')
+# lines(time4, rate.inc4, col='green')
+# lines(c(400,430),c(rate.inc0[1]*0.1 , rate.inc0[1]*0.1 ),lty=3)
 
 
 
