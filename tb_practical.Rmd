@@ -1,0 +1,38 @@
+---
+title: "TB: exploring the case of elimination with a simple compartmental model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Tuberculosis (TB) elimination is now more present than ever in the Global Health agenda, but if it is achievable, how and/or when could  this happen, is yet uncertain and an an ongoing discussion in the field. By setting up a simple compartmental transmission model of TB, and testing different approaches to curb the TB burden, this practical intends to illustrate important concepts of TB epidemiology.
+
+
+##Core concepts
+The following concepts will be developed further during the practical:
+
+* Compartmental Models
+* Flow diagrams
+* Long-term infection dynamics
+* Natural History of TB
+* TB control strategies
+
+##Required packages
+```{r}
+#install.packages("deSolve", dep=TRUE)
+#install.packages("gridExtra", dep = TRUE)
+#install.packages("ggplot2", dep = TRUE)
+```
+
+## Natural History of TB
+
+Briefly, we want to build a model that reflects some imporant facts about TB time line. 
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
