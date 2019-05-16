@@ -8,6 +8,7 @@ library(deSolve)
 ## Warning: package 'deSolve' was built under R version 3.4.4
 library(gridExtra)
 library(ggplot2)
+library(reshape)
 
 #Source functions
 source("fun/TB.Basic.R")
@@ -56,14 +57,14 @@ xstart <- c(U = N-I0,
             Iremote=0)               
 
 #Run the model
-out <- as.data.frame(ode(y = xstart, times = times, 
+out0 <- as.data.frame(ode(y = xstart, times = times, 
                          func = TB.Basic, parms = params))   #
 
 # Model output
-N       <- out$U+out$L+out$I+out$R  
-rate.inc<- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo <- diff(out$Iremote)/diff(out$Incidence)
-time    <- out$time[1:length(out$time)-1]
+N       <- out0$U+out0$L+out0$I+out0$R  
+rate.inc<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
+fr.remo <- diff(out0$Iremote)/diff(out0$Incidence)
+time    <- out0$time[1:length(out0$time)-1]
 
 # Order in dataframe for plotting
 dat<-data.frame(Years=time+(2019-400), incidence=rate.inc)
@@ -80,15 +81,16 @@ p +
 #2) Can you modify manually the transmission rate per capita to achieve an
 # incidence rate as that of Bangladesh in 2017?  
 #-----------------------------------------------------------------------
-
-
 Inc.Bangladesh<- 221
+
+dot<-data.frame(Data="Bangladesh",Years=2017, incidence=Inc.Bangladesh)
+
 
 p1<-p + 
   geom_line(col="blue",  size=1.2) +
   ggtitle ('TB Incidence') +
   theme_bw() + ylab('Rate per 100,000 pop') +
-  geom_point(aes(x=2017, y=Inc.Bangladesh), colour="red", size=6, shape=18) 
+  geom_point(dot, mapping=aes(x=Years, y=incidence, col=Data), size=6, shape=18) 
   
 
 # Pie of remote incidence in 2017
@@ -102,18 +104,54 @@ pie<- ggplot(df, aes(x="", y=value, fill=Source))+
   geom_bar(width = 1, stat = "identity") +
   coord_polar("y", start=0)+
   scale_fill_manual(values = mycols) +
-  theme_void()
-
+  theme_void()+
+  ggtitle ('Baseline') 
+  
 
 grid.arrange(p1,pie, ncol=2, nrow =2)
 
+########################################################################
+## Simulation 0
+# Project a baseline
+
+# Prepare for new simulation
+sfin       <- tail(out0,1)     
+params_new <- params
+params_old <- params
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+t.interv   <- c(times_new[2], times_new[2]+t.scale)
+
+
+# Starting conditions
+xstart <- c(U = sfin$U, 
+            L = sfin$L,  
+            I = sfin$I, 
+            R = sfin$R,
+            Incidence= sfin$Incidence,
+            Irecent=   sfin$Irecent,  
+            Iremote=   sfin$Iremote) 
+
+
+#Create function handle
+fx<-TB.Basic
+
+#Run the model
+out <- as.data.frame(ode(y = xstart, times = times_new, 
+                          func = fx, parms = params_new))  # ??
+# Model output
+N            <- out$U+out$L+out$I+out$R  
+rate.inc    <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
+fr.remo0     <- diff(out$Iremote)/diff(out$Incidence)
+time         <- out$time[1:length(out$time)-1]
+dat0         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
+dat0$Sim     <- "Baseline"
 
 ########################################################################
 ## Simulation 1
 # An Intervention simulating introduction of treatment
 
 # Prepare for new simulation
-sfin       <- tail(out,1)     
+sfin       <- tail(out0,1)     
 params_new <- params
 params_old <- params
 times_new  <- seq(t.intervention, t.intervention+25 , by=1)
@@ -144,29 +182,34 @@ fx<-TB.Basic
 scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
 
 #Run the model
-out2 <- as.data.frame(ode(y = xstart, times = times_new, 
+out <- as.data.frame(ode(y = xstart, times = times_new, 
                           func = scalefx, parms = params_new))  # ??
 # Model output
-N         <- out2$U+out2$L+out2$I+out2$R  
-rate.inc2 <- 1e5*(diff(out2$Incidence)/N[1:length(N)-1])
-fr.remo2 <- diff(out2$Iremote)/diff(out2$Incidence)
-time      <- out2$time[1:length(out2$time)-1]
-dat<-data.frame(Years=time+(2019-400), incidence=rate.inc2)
+N            <- out$U+out$L+out$I+out$R  
+rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
+fr.remo1     <- diff(out$Iremote)/diff(out$Incidence)
+time         <- out$time[1:length(out$time)-1]
+dat1         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
+dat1$Sim     <- "Treatment"
 
 # Create plot
-p<- ggplot(data=dat, mapping = aes(x=Years, y=incidence))
+data  <-rbind(dat0, dat1)
+remote<-fr.remo1
+titl  <-"Treatment"
+
+p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
 
 p1<-p + 
-  geom_line(col="blue",  size=1.2) +
+  geom_line(size=1.2) +
   ggtitle ('TB Incidence') +
   theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(rate.inc2))
+  ylim(0,max(data$Incidence))
 
 
 # Pie chart of remote vs recent incidence 
 df <- data.frame(
   Source = c("Recent", "Remote"),
-  value  = c(1-tail(fr.remo2,1),tail(fr.remo2,1))
+  value  = c(1-tail(remote,1),tail(remote,1))
 )
 
 mycols <- c("#0073C2FF", "#EFC000FF")
@@ -174,48 +217,11 @@ pie<- ggplot(df, aes(x="", y=value, fill=Source))+
   geom_bar(width = 1, stat = "identity") +
   coord_polar("y", start=0)+
   scale_fill_manual(values = mycols) +
-  theme_void()
+  theme_void()+
+  ggtitle (titl) 
 
 
 grid.arrange(p1,pie, ncol=2, nrow =2)
-########################################################################
-## Simulation 2
-# An Intervention simulating introduction of treatment
-
-# Prepare for new simulation
-sfin       <- out     
-params_new <- params
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
-# Change parameters for intervention
-params_new["selfcure"]<-1/(T.durat*0.5)
-
-# Starting conditions
-xstart <- c(U = tail(sfin$U,1), 
-            L = tail(sfin$L,1),  
-            I = tail(sfin$I,1), 
-            R = tail(sfin$R,1),
-            Incidence= tail(sfin$Incidence,1),
-            Irecent= tail(sfin$Irecent,1),  
-            Iremote= tail(sfin$Iremote,1)) 
-
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-out2 <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = scalefx, parms = params_new))  # ??
-
-N <- out2$U+out2$L+out2$I+out2$R  
-
-rate.inc2<- 1e5*(diff(out2$Incidence)/N[1:length(N)-1])
-fr.remo2 <- diff(out2$Iremote)/diff(out2$Incidence)
-time2<-out2$time[1:length(out2$time)-1]
-plot(time2, rate.inc2, col='blue',type='l',ylim = c(0,max(rate.inc2)),
-     xlab ='Years', ylab = 'TB Incidence x 100K')
 
 
 ########################################################################
@@ -223,128 +229,210 @@ plot(time2, rate.inc2, col='blue',type='l',ylim = c(0,max(rate.inc2)),
 # An Intervention simulating transm reduction
 
 # Prepare for new simulation
+sfin       <- tail(out0,1)     
 params_new <- params_new
 params_old <- params
-
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+t.interv   <- c(times_new[2], times_new[2]+t.scale)
 
 # Change parameters for intervention
-params_new["beta"] <-beta*0
+params_new["beta"]<-beta * 0
+
+# Starting conditions
+xstart <- c(U = sfin$U, 
+            L = sfin$L,  
+            I = sfin$I, 
+            R = sfin$R,
+            Incidence= sfin$Incidence,
+            Irecent=   sfin$Irecent,  
+            Iremote=   sfin$Iremote) 
 
 
-# Create function handle
+#Create function handle
 fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params_old,fx)
+scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
+
+#Run the model
+out <- as.data.frame(ode(y = xstart, times = times_new, 
+                         func = scalefx, parms = params_new))  # ??
+# Model output
+N            <- out$U+out$L+out$I+out$R  
+rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
+fr.remo2      <- diff(out$Iremote)/diff(out$Incidence)
+time         <- out$time[1:length(out$time)-1]
+dat2         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
+dat2$Sim     <- "Transmission"
+
+# Create plot
+data  <-rbind(data, dat2)
+remote<-fr.remo2
+titl  <-"Transmission"
+
+p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
+
+p1<-p + 
+  geom_line(size=1.2) +
+  ggtitle ('TB Incidence') +
+  theme_bw() + ylab('Rate per 100,000 pop')+
+  ylim(0,max(data$Incidence))
 
 
-out3 <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = scalefx, parms = params_new))  # ??
+# Pie chart of remote vs recent incidence 
+df <- data.frame(
+  Source = c("Recent", "Remote"),
+  value  = c(1-tail(remote,1),tail(remote,1))
+)
 
-N <- out3$U+out3$L+out3$I+out3$R  
+mycols <- c("#0073C2FF", "#EFC000FF")
+pie<- ggplot(df, aes(x="", y=value, fill=Source))+
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0)+
+  scale_fill_manual(values = mycols) +
+  theme_void()+
+  ggtitle (titl) 
 
-rate.inc3<- 1e5*(diff(out3$Incidence)/N[1:length(N)-1])
-fr.remo3 <- diff(out3$Iremote)/diff(out3$Incidence)
-time3<-out3$time[1:length(out3$time)-1]
-plot(time3, rate.inc3, col='blue',type='l',ylim = c(0,max(rate.inc3)),
-     xlab ='Years', ylab = 'TB Incidence x 100K')
+
+grid.arrange(p1,pie, ncol=2, nrow =2)
 
 
 ########################################################################
-## Simulation 4
+## Simulation 3
 # An Intervention simulating LTBI treatment
 
+
 # Prepare for new simulation
+sfin       <- tail(out0,1)     
 params_new <- params_new
 params_old <- params
-
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+t.interv   <- c(times_new[2], times_new[2]+t.scale)
 
 # Change parameters for intervention
-params_new["phi"] <-  0.01*(1/T.lat) 
+params_new["phi"] <-  0.01*(1/T.lfx) 
+
+# Starting conditions
+xstart <- c(U = sfin$U, 
+            L = sfin$L,  
+            I = sfin$I, 
+            R = sfin$R,
+            Incidence= sfin$Incidence,
+            Irecent=   sfin$Irecent,  
+            Iremote=   sfin$Iremote) 
 
 
-
-# Create function handle
+#Create function handle
 fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params_old,fx)
+scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
+
+#Run the model
+out <- as.data.frame(ode(y = xstart, times = times_new, 
+                         func = scalefx, parms = params_new))  # ??
+# Model output
+N            <- out$U+out$L+out$I+out$R  
+rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
+fr.remo3      <- diff(out$Iremote)/diff(out$Incidence)
+time         <- out$time[1:length(out$time)-1]
+dat3         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
+dat3$Sim     <- "LTBI"
+
+# Create plot
+data  <-rbind(data, dat3)
+remote<-fr.remo3
+titl  <-"LTBI"
+
+p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
+
+p1<-p + 
+  geom_line(size=1.2) +
+  ggtitle ('TB Incidence') +
+  theme_bw() + ylab('Rate per 100,000 pop')+
+  ylim(0,max(data$Incidence))
 
 
-out4 <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = scalefx, parms = params_new))  # ??
+# Pie chart of remote vs recent incidence 
+df <- data.frame(
+  Source = c("Recent", "Remote"),
+  value  = c(1-tail(remote,1),tail(remote,1))
+)
 
-N <- out4$U+out4$L+out4$I+out4$R  
+mycols <- c("#0073C2FF", "#EFC000FF")
+pie<- ggplot(df, aes(x="", y=value, fill=Source))+
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0)+
+  scale_fill_manual(values = mycols) +
+  theme_void()+
+  ggtitle (titl) 
 
-rate.inc4<- 1e5*(diff(out4$Incidence)/N[1:length(N)-1])
-fr.remo4 <- diff(out4$Iremote)/diff(out4$Incidence)
-time4<-out4$time[1:length(out4$time)-1]
-plot(time4, rate.inc4, col='blue',type='l',ylim = c(0,max(rate.inc4)),
-     xlab ='Years', ylab = 'TB Incidence x 100K')
+
+grid.arrange(p1,pie, ncol=2, nrow =2)
 
 ########################################################################
 ## Counterfactual
 
 # Prepare for new simulation
-params_new <- params
-params_old <- params
-
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-
-
-out0 <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = TB.Basic, parms = params_new))  # ??
-
-N <- out0$U+out0$L+out0$I+out0$R  
-rate.inc0<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
-fr.remo0 <- diff(out0$Iremote)/diff(out0$Incidence)
-
-############################################
-############################## Plot all
-
-# Trajectories
-Years<-time2+1617
-allruns<-data.frame(Years , rate.inc0, rate.inc2, rate.inc3, rate.inc4)
-sz<-1.2
-p<- ggplot(data=allruns, mapping = aes(x=Years, y=value))
-
-p1<-p + 
-  geom_line(aes(y=rate.inc0, colour="Baseline"),  size=sz)+
-  geom_line(aes(y=rate.inc2, colour="Treatment"),  size=sz)+
-  geom_line(aes(y=rate.inc3, colour="Transmission"),  size=sz)+
-  geom_line(aes(y=rate.inc4, colour="LTBI"), size=sz)+
-  scale_colour_manual(name="Intervention",
-                      breaks=c("Baseline","Treatment","Transmission","LTBI"), 
-                      values = c("Baseline"="indianred2", "Treatment"="yellow3", 
-                                 "Transmission"="springgreen4", "LTBI"="royalblue")) +
-  geom_hline(yintercept=rate.inc0[1]*0.1, linetype="dashed", color = "black") +
-  ylim(0,max(rate.inc0))+
-  ggtitle ('TB Interventions') +
-  theme_bw() + ylab('Rate per 100,000')
-
-
-# Bars
-remoteI<-data.frame(
-  Intervention=factor(c("Baseline","Treatment","Transmission","LTBI"),
-                      levels=c("Baseline","Treatment","Transmission","LTBI")),
-  remote=c(tail(fr.remo0, n=1), tail(fr.remo2, n=1),
-           tail(fr.remo3, n=1) , tail(fr.remo4, n=1)) )
-
-remoteI$remote<-remoteI$remote*100
-
-b<- ggplot(data=remoteI, mapping=aes(x=Intervention, y=remote, fill=Intervention))
-p2<- b +
-  geom_bar(stat="identity")+
-  scale_fill_manual(values = c("Baseline"="indianred2", 
-                               "Treatment"="yellow3", 
-                               "Transmission"="springgreen4", 
-                               "LTBI"="royalblue")) +
-  ylab('Fraction Remote') +
-  ggtitle ('Incidence from remote source') +
-  theme_bw()
-  
-  
-
-
-grid.arrange(p1,p2, ncol=1, nrow=2)
-
-
+# params_new <- params
+# params_old <- params
+# 
+# times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+# 
+# 
+# out0 <- as.data.frame(ode(y = xstart, times = times_new, 
+#                           func = TB.Basic, parms = params_new))  # ??
+# 
+# N <- out0$U+out0$L+out0$I+out0$R  
+# rate.inc0<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
+# fr.remo0 <- diff(out0$Iremote)/diff(out0$Incidence)
+# 
+# ############################################
+# ############################## Plot all
+# 
+# # Trajectories
+# Years<-time2+1617
+# allruns<-data.frame(Years , rate.inc0, rate.inc2, rate.inc3, rate.inc4)
+# sz<-1.2
+# p<- ggplot(data=allruns, mapping = aes(x=Years, y=value))
+# 
+# p1<-p + 
+#   geom_line(aes(y=rate.inc0, colour="Baseline"),  size=sz)+
+#   geom_line(aes(y=rate.inc2, colour="Treatment"),  size=sz)+
+#   geom_line(aes(y=rate.inc3, colour="Transmission"),  size=sz)+
+#   geom_line(aes(y=rate.inc4, colour="LTBI"), size=sz)+
+#   scale_colour_manual(name="Intervention",
+#                       breaks=c("Baseline","Treatment","Transmission","LTBI"), 
+#                       values = c("Baseline"="indianred2", "Treatment"="yellow3", 
+#                                  "Transmission"="springgreen4", "LTBI"="royalblue")) +
+#   geom_hline(yintercept=rate.inc0[1]*0.1, linetype="dashed", color = "black") +
+#   ylim(0,max(rate.inc0))+
+#   ggtitle ('TB Interventions') +
+#   theme_bw() + ylab('Rate per 100,000')
+# 
+# 
+# # Bars
+# remoteI<-data.frame(
+#   Intervention=factor(c("Baseline","Treatment","Transmission","LTBI"),
+#                       levels=c("Baseline","Treatment","Transmission","LTBI")),
+#   remote=c(tail(fr.remo0, n=1), tail(fr.remo2, n=1),
+#            tail(fr.remo3, n=1) , tail(fr.remo4, n=1)) )
+# 
+# remoteI$remote<-remoteI$remote*100
+# 
+# b<- ggplot(data=remoteI, mapping=aes(x=Intervention, y=remote, fill=Intervention))
+# p2<- b +
+#   geom_bar(stat="identity")+
+#   scale_fill_manual(values = c("Baseline"="indianred2", 
+#                                "Treatment"="yellow3", 
+#                                "Transmission"="springgreen4", 
+#                                "LTBI"="royalblue")) +
+#   ylab('Fraction Remote') +
+#   ggtitle ('Incidence from remote source') +
+#   theme_bw()
+#   
+#   
+# 
+# 
+# grid.arrange(p1,p2, ncol=1, nrow=2)
+# 
+# 
 
 # plot(time2, rate.inc0, col='blue',type='l',ylim = c(0,max(rate.inc0)),
 #      xlab ='Years', ylab = 'TB Incidence x 100K')
