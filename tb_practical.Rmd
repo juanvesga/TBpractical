@@ -190,8 +190,6 @@ params <- c(break_in=break_in, selfcure=selfcure, mu=mu, mu_tb=mu_tb
 N <- 1                  # Total population equal to unity 
 I0 <-1e-6               # TB seed at time 0
 
-
-# Initial conditions
 xstart <- c(U = N-I0,
             L = 0,
             I = I0,  
@@ -236,7 +234,7 @@ We have produced and incidence trajectory for a system that seems to be in endem
 
 3) Can you take a moment and try to explain in a few words what it means for an epidemic to achieve an endemic equilibrium?   
 
-4) Making use of concepts from your previous lectures, can you think a simple mathematical expression for the endemic equilibrium in terms of the basic reproduction number ($R_0$) ? ...  
+4) Making use of concepts from your previous lectures, can you think of a simple mathematical expression for the endemic equilibrium in terms of the basic reproduction number ($R_0$) ? ...  
 
 ---
 
@@ -276,18 +274,18 @@ We could attempt to estimate $R_0$ for the given model with a simple rearrange o
 
 ### Part II: explore the case for TB elimination
 
-Now we have some understanding of TB dynamics, and we want to explore the case of TB elimnation using our model. To make the case more interesting we can try and get our TB incidence trajectorie match the current estimation for a high TB burden country. 
+Now we have some understanding of TB dynamics, and we want to explore the case of TB elimination using our model. To make the case more interesting we can try and get our TB incidence trajectory match the current estimation for a high TB burden country. 
 
-1) Explore the WHO's TB country profiles for the 30 countries with the highest TB burden ( [here](https://www.who.int/tb/publications/global_report/gtbr2017_annex2.pdf?ua=1) )
-
-
-2) Select a country with an incidence trend that resembles the unchanged trend in our model. Then, take note of the TB incidence rate per 100K estimation (figure including HIV/TB). 
+1) Explore WHO's TB country profiles for the 30 countries with the highest TB burden ( [here](https://www.who.int/tb/publications/global_report/gtbr2017_annex2.pdf?ua=1) )
 
 
-3) In the code below replace the missing variables for country incidence, country name and beta. Vary the value of beta until your incidence trajectory matches the data point in the plot. (Run the code as many times as necessary) 
+2) Select a country with an incidence trend that resembles the unchanged trend in our model. Then, take note of the TB incidence rate per 100K estimation (including HIV/TB). 
 
 
-```{r eval=FALSE}
+3) In the code below replace the missing variables for country incidence, country name and beta parameter. Vary the value of beta until your incidence trajectory matches the data point in the plot. (Run the code as many times as necessary) 
+
+
+```{r eval=FALSE, warning=FALSE}
 Inc.country  <-     # TB Incidence rate per 100K (including HIV/TB)  
 country.name <-     # Name of your country (eg. "Bangladesh")   
 beta         <-     # Transmission rate per capita per year 
@@ -404,75 +402,12 @@ pie<- ggplot(df, aes(x="", y=value, fill=Source))+
 grid.arrange(p1,pie)
 ```
 
-Now, lets create a baseline incidence to use as counterfactual in our exploration of TB elimnation. 
-
-```{r echo=TRUE}
-## Simulation 0
-# Project a baseline
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)     
-params_new <- params
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
-
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
-
-
-#Create function handle
-fx<-TB.Basic
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = fx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc    <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo0     <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat0         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat0$Sim     <- "Baseline"
-```
-
-
-We will start our exploration of interventions by simulating the roll-out of a succesful TB treatment campaign. For simplicity, we want to do so without altering our current model structure. The simplest way is to alter the the rate of spontaneus cure. 
-
-In the pathway to succesful (curative) TB treatment, there are a number of events an individual should go through.
-
-a) Careseeking rate (cs): We can define careseking as the time it takes a symptomatic individual to seek for medical care
-b) Probability of diagnosis (pDx): the probability that once an individual has sought care, a diagnostic test will be perfomed 
-c) Probability of treatment(pTx): probability that once an individual has been diagnosed, treatment will be prescribed
-d) Treatment duration (T.rtx): Total duration of the treatment course (standart TB treatment is 6 months)
-
-For the sake of simplicity we will not include other factors that might also play a role in treatment success.  
-
-5) Can you list at least two other factors related to TB treatment success? 
-
----
-
-####*Answer*
-
-5) 
-* Treatment completion rates: TB treatment is long and potentially toxic. Low adherence is a big problem for Tb programmes
-* Drug sensitivity of TB strain: even with full completion, resistance to components of TB treatment regimen will invariably lead to treatment failuire    
-
-* Extra: Concomitant TB and HIV treatment: even with full completion and a drug-sensitive TB  strain, interactions with antiretrovirals might reduce the bioavalability of TB drugs.       
-
----
+To proceed with roling out the interventions in our model we need a few more steps to get our functions ready to be called when necessary. 
 
 First, we need to create a wraper function that allows us to scale-up our interventions smothly over a period of time. Copy and execute the code below:
 
 
-```{r echo=TRUE}
+```{r echo=TRUE, warning=FALSE}
 # Intervention scaling function
 scale_up<- function (t, state, parameters,t.interv,parameters_old,fx) {
   
@@ -491,108 +426,169 @@ scale_up<- function (t, state, parameters,t.interv,parameters_old,fx) {
 
 ```
 
-6) In the code below, assign values to the variables that reflect the components of TB treatment. we want to consider an average careseeking delay of 1 year, a probability of Dx of 95%, and treatment initiation of 95%. 
+Also, we need a function that we will run our new instance of the model and get plots for us. 
+
+```{r echo=TRUE, warning=FALSE}
+get_intervention<- function (sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data_stub) {
+  
+  # Starting conditions
+  xstart <- c(U = sfin$U, 
+              L = sfin$L,  
+              I = sfin$I, 
+              R = sfin$R,
+              Incidence= sfin$Incidence,
+              Irecent=   sfin$Irecent,  
+              Iremote=   sfin$Iremote) 
+  
+  #Run the model
+  out <- as.data.frame(ode(y = xstart, times = times_new, 
+                           func = fx_scale, parms = params_new))  # 
+  # Model output
+  N            <- out$U+out$L+out$I+out$R  
+  rate.inc    <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
+  fr.remo     <- diff(out$Iremote)/diff(out$Incidence)
+  time         <- out$time[1:length(out$time)-1]
+  dat         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
+  dat$Sim     <- int_name
+  
+  # Create plot
+  if (is.na(data_stub))
+  {
+    data<-dat
+  }
+  else 
+  {
+    data  <-rbind(data_stub, dat)
+  }
+  
+  remote<-fr.remo
+  titl  <-int_name
+  
+  p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
+  
+  p1<-p + 
+    geom_line(size=1.2) +
+    ggtitle ('TB Incidence') +
+    theme_bw() + ylab('Rate per 100,000 pop')+
+    ylim(0,max(data$Incidence))+
+  # End TB threshold
+  geom_hline(yintercept=head(rate.inc,1)*0.1, linetype="dashed", color = "black", size=1)+
+  # Elimination
+  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
+
+  # Pie chart of remote vs recent incidence 
+  df <- data.frame(
+    Source = c("Recent", "Remote"),
+    value  = c(1-tail(remote,1),tail(remote,1))
+  )
+  
+  mycols <- c("#0073C2FF", "#EFC000FF")
+  pie<- ggplot(df, aes(x="", y=value, fill=Source))+
+    geom_bar(width = 1, stat = "identity") +
+    coord_polar("y", start=0)+
+    scale_fill_manual(values = mycols) +
+    theme_void()+
+    ggtitle (titl) 
+  
+  grid.arrange(p1,pie)
+  return(data)
+}
+```
+
+Let's create function handles for the basic functions.
+
+```{r echo=TRUE, warning=FALSE}
+# Function handles
+
+fx_basic<-TB.Basic
+fx_scale<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx_basic)
+```
+
+
+Now, lets create a baseline incidence to use as counterfactual in our exploration of TB elimnation.    
+
+```{r echo=TRUE, warning=FALSE}
+## Simulation 0
+# Project a baseline
+int_name   <- "Baseline"
+
+sfin       <- tail(out0,1)     
+params_new <- params
+params_old <- params
+times_new  <- seq(t.intervention, t.intervention+25 , by=1)
+t.interv   <- c(times_new[2], times_new[2]+t.scale)
+
+data0<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, NA) 
+
+```
+
+As we can see from the plot above, we have included dashed lines for WHO's End TB goal (black) and a TB elimination threshold (red).
+
+This, so we can check how our model performs against these reference goals. WHO has define the End TB goal as a 95% reduction in TB incidence by 2035. Elimination is defined as a threshold <1 case per million population. The latter should be interpreted as the theoretical limit for erradication, while the End TB is meant to be an achievable goal, which, if achieved, should leave countries at the door of elimination.     
+
+We will start our exploration of interventions by simulating the roll-out of a succesful TB treatment campaign. For simplicity, we want to do so without altering our current model structure. The simplest way is to alter the rate of spontaneus cure. 
+
+In the pathway to succesful (curative) TB treatment, there are a number of events an individual should go through.
+
+a) Careseeking rate (cs): We can define careseking as the time it takes a symptomatic individual to seek for medical care
+b) Probability of diagnosis (pDx): the probability that once an individual has sought care, a diagnostic test will be perfomed 
+c) Probability of treatment (pTx): probability that once an individual has been diagnosed, treatment will be prescribed
+d) Treatment duration (T.rtx): Total duration of the treatment course (standart TB treatment is 6 months)
+
+For the sake of simplicity we will not include other factors that might also play a role in treatment success.  
+
+5) Can you list at least two other factors related to TB treatment success? 
+
+---
+
+####*Answer*
+
+5) 
+* Treatment completion rates: TB treatment is long and potentially toxic. Low adherence is a big problem for TB programmes
+* Drug sensitivity of TB strain: even with full completion, resistance to components of TB treatment regimen will invariably lead to treatment failure    
+
+* Extra: Concomitant TB and HIV treatment: even with full completion and a drug-sensitive TB  strain, interactions with antiretrovirals might reduce the bioavalability of TB drugs.       
+
+---
+
+
+6) In the code below, assign values to the variables that reflect the components of TB treatment. Consider an average careseeking delay of 1 year, a probability of diagnosis of 95%, and treatment initiation of 95%. 
 
 7) Write the code for the term Tx. (Note that Tx is a rate that will add to the existing selfcure rate in your model). Run the code to see your results. 
 
 
-```{r eval=FALSE}
+```{r eval=FALSE, warning=FALSE}
 ## Simulation 1
 # An Intervention simulating introduction of treatment
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                # Get our starting point from end of last simulation
-params_new <- params                                      # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)  
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
+int_name   <- "Treatment"
 
 # Change parameters for intervention
 T.cs <-       # Time delay (yrs) between developing symptoms and seeking for care
 pDx  <-       # Probability of being diagnosed once sought care
 pTx  <-       # probability of recieving correct Tx if diagnosed
 T.rTx<-   0.5 # 6 months treatment duration
-
 Tx <-
 
 params_new["selfcure"]<-selfcure + Tx
 
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
-
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo1     <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat1         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat1$Sim     <- "Treatment"
-
-# Create plot
-data  <-rbind(dat0, dat1)
-remote<-fr.remo1
-titl  <-"Treatment"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
-
+data1<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data0) 
 ```
 
 
-You should be looking at a plot similar to the one below. You can see the impact of a treament intervention of important scale. 
+You should be looking at a plot similar to the one below. 
+
 
 8) What can you say about the proportion *Recent vs. Remote* ?
 
 
 
-```{r echo=FALSE}
+```{r echo=FALSE, warning=FALSE}
 ## Simulation 1
 # An Intervention simulating introduction of treatment
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                     # Get our starting point from end of last simulation
-params_new <- params                                           # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)    # 
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
+int_name   <- "Treatment"
 # Change parameters for intervention
 T.cs <- 1     # Time delay (yrs) between developing symptoms and seeking for care
 pDx  <- 0.95   # Probability of being diagnosed once sought care
@@ -600,64 +596,10 @@ pTx  <- 0.95   # probability of recieving correct Tx if diagnosed
 T.rTx<- 0.5 # 6 months treatment duration
 
 Tx <-pDx*pTx*(1/(T.cs+T.rTx))
-
 params_new["selfcure"]<-selfcure + Tx
 
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
-
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                          func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo1     <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat1         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat1$Sim     <- "Treatment"
-
-# Create plot
-data  <-rbind(dat0, dat1)
-remote<-fr.remo1
-titl  <-"Treatment"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
+data1<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name , data0) 
 
 ```
 
@@ -670,23 +612,16 @@ grid.arrange(p1,pie)
 ---
 
 
-Now, let's combine the treatment campaign with an intervention that make TB services widely available in the community.This intervention should increase the current yield by 75%. 
+Now, let's combine the treatment campaign with an intervention that make TB services widely available in the community. This intervention should increase the current yield of TB prevalent cases screened by 75%. 
 
 9) What parameters in our previous simulation would you alter to simulate such intervention? Modify the code below and run. 
 
-*(Note: remember that we want to combine interventions, meaning that the previous intervention should be introduced here too)*
+*(Note: remember that we want to combine interventions, i.e., the previous intervention should be introduced here too)*
 
-```{r eval=FALSE}
+```{r eval=FALSE, warning=FALSE}
 ## Simulation 2
-# An Intervention simulating transm reduction
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                     # Get our starting point from end of last simulation
-params_new <- params_new                                       # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
+# An Intervention simulating demand generation
+int_name   <- "Demand generation"
 # Change parameters for intervention
 T.cs <-      # Time delay (yrs) between developing symptoms and seeking for care
 pDx  <-      # Probability of being diagnosed once sought care
@@ -697,78 +632,19 @@ Tx <-
 
 params_new["selfcure"]<-selfcure + Tx
 
-  
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
+data2<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data1) 
 
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                         func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo2      <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat2         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat2$Sim     <- "Demand generation"
-
-# Create plot
-data  <-rbind(data, dat2)
-remote<-fr.remo2
-titl  <-"Demand generation"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
 ```
 
 Our plot should look like this..
 
 
 
-```{r echo=FALSE}
+```{r echo=FALSE,, warning=FALSE}
 ## Simulation 2
-# An Intervention simulating transm reduction
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                     # Get our starting point from end of last simulation
-params_new <- params_new                                       # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
+# An Intervention simulating transm reduction demand generation
+int_name   <- "Demand generation"
 
 # Change parameters for intervention
 T.cs <-  1*(1-0.75)    # Time delay (yrs) between developing symptoms and seeking for care
@@ -780,61 +656,10 @@ Tx <-pDx*pTx*(1/(T.cs+T.rTx))
 
 params_new["selfcure"]<-selfcure + Tx
 
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
 
+data2<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data1) 
 
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                         func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo2      <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat2         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat2$Sim     <- "Demand generation"
-
-# Create plot
-data  <-rbind(data, dat2)
-remote<-fr.remo2
-titl  <-"Demand generation"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
 ```
 
 
@@ -842,85 +667,20 @@ We can see from our remote/recent pie chart that even after a strong combined ca
 
 Let's imagine a hypothetical scenario where transmission is completely shut down. This is practically unfeasible, but for the sake of testing our elimination case let's imagine we can stop transmission with a fully curative intervention in every single prevalent case.  
 
-We also might want to check how our model performs against the end TB and elimination scenarios. WHO has define the End TB goal as a 95% reduction in TB incidence by 2035. Elimination is defined as a threshold <1 case per million population. The latter should be interpreted as the theoretical limit for erradicatio, while the End TB is meant to be an achievable goal, which if achieved should leave countries at the door of elimination.     
 
 10) Run the code below. 
 
 
-```{r echo=TRUE}
+```{r echo=TRUE, warning=FALSE}
 ## Simulation 3
+int_name<-"Transmission stop"
 # An Intervention simulating transm reduction
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                     # Get our starting point from end of last simulation
-params_new <- params_new                                       # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
 
 params_new["beta"]<-0
 
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
+data3<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data2) 
 
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                         func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo2      <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat2         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat2$Sim     <- "Transmission stop"
-
-# Create plot
-data  <-rbind(data, dat2)
-remote<-fr.remo2
-titl  <-"Transmission stop"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))+
-  # Pre-elimination
-  geom_hline(yintercept=Inc.country*0.1, linetype="dashed", color = "black", size=1)+
-  # Elimination
-  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
-
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
 ```
 
 A fully curative intervention appears insufficient to drive the TB epidemic to elimination. 
@@ -947,80 +707,16 @@ Let's introduce a prevention campaign that treats 100% latent TB infection (LTBI
 
 *Note that the balck dashed line below represent the End TB goal and the read line is tyhe elimination threshold*
 
-```{r echo=TRUE}
+```{r echo=TRUE, warning=FALSE}
 ## Simulation 3
 # An Intervention simulating transm reduction
-
-# Prepare for new simulation
-sfin       <- tail(out0,1)                                     # Get our starting point from end of last simulation
-params_new <- params_new                                       # update parameters
-params_old <- params
-times_new  <- seq(t.intervention, t.intervention+25 , by=1)
-t.interv   <- c(times_new[2], times_new[2]+t.scale)
-
+int_name<- "Prevention"
 
 params_new["break_in"]<-0.01*(1/T.lfx)
 
-# Starting conditions
-xstart <- c(U = sfin$U, 
-            L = sfin$L,  
-            I = sfin$I, 
-            R = sfin$R,
-            Incidence= sfin$Incidence,
-            Irecent=   sfin$Irecent,  
-            Iremote=   sfin$Iremote) 
+data4<-get_intervention(sfin, params_new, params_old,times_new,
+                             t.interv, fx_scale, int_name, data3) 
 
-
-#Create function handle
-fx<-TB.Basic
-scalefx<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
-
-#Run the model
-out <- as.data.frame(ode(y = xstart, times = times_new, 
-                         func = scalefx, parms = params_new))  # ??
-# Model output
-N            <- out$U+out$L+out$I+out$R  
-rate.inc     <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
-fr.remo2      <- diff(out$Iremote)/diff(out$Incidence)
-time         <- out$time[1:length(out$time)-1]
-dat2         <- data.frame(Years=time+(2019-400), Incidence=rate.inc)
-dat2$Sim     <- "Prevention"
-
-# Create plot
-data  <-rbind(data, dat2)
-remote<-fr.remo2
-titl  <-"Prevention"
-
-p<- ggplot(data=data, mapping = aes(x=Years, y=Incidence, col=Sim))
-
-p1<-p + 
-  geom_line(size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')+
-  ylim(0,max(data$Incidence))+
-  # Pre-elimination
-  geom_hline(yintercept=Inc.country*0.1, linetype="dashed", color = "black", size=1)+
-  # Elimination
-  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
-
-
-
-# Pie chart of remote vs recent incidence 
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(remote,1),tail(remote,1))
-)
-
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle (titl) 
-
-
-grid.arrange(p1,pie)
 ```
 
 
@@ -1053,7 +749,7 @@ c) Since MDR-TB is the resulting effect of a wide access to TB drug regimens. As
 
 ## Contributors
 
-* Juan F. Vesga
+* Juan F. Vesga 
 
 The source file is hosted on [github](https://github.com/juanvesga/TBpractical/blob/master/tb_practical.Rmd).
 
