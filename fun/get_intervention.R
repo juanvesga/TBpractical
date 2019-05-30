@@ -1,6 +1,6 @@
 
 get_intervention<- function (sfin, params_new, params_old,times_new,
-                             t.interv, fx_scale, int_name, data_stub) {
+                             t.interv, fx_scale,fx_basic, int_name, data_stub) {
   
   # Starting conditions
   xstart <- c(U = sfin$U, 
@@ -12,8 +12,15 @@ get_intervention<- function (sfin, params_new, params_old,times_new,
               Iremote=   sfin$Iremote) 
   
   #Run the model
+  if (is.na(t.interv))
+  {
+    fx<-fx_basic
+  }  else {
+    fx<-fx_scale
+    }
+  
   out <- as.data.frame(ode(y = xstart, times = times_new, 
-                           func = fx_scale, parms = params_new))  # 
+                           func = fx, parms = params_new))  # 
   # Model output
   N            <- out$U+out$L+out$I+out$R  
   rate.inc    <- 1e5*(diff(out$Incidence)/N[1:length(N)-1])
@@ -42,11 +49,8 @@ get_intervention<- function (sfin, params_new, params_old,times_new,
     geom_line(size=1.2) +
     ggtitle ('TB Incidence') +
     theme_bw() + ylab('Rate per 100,000 pop')+
-    ylim(0,max(data$Incidence))+
-    # EndTb
-    geom_hline(yintercept=head(rate.inc,1)*0.1, linetype="dashed", color = "black", size=1)+
-    # Elimination
-    geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
+    ylim(0,max(data$Incidence))
+
   
   
   
@@ -65,8 +69,10 @@ get_intervention<- function (sfin, params_new, params_old,times_new,
     ggtitle (titl) 
   
   
-  grid.arrange(p1,pie, ncol=2, nrow =2)
+ 
   
-  return(data)
+  output<-list("out"=out, "lines"=p1, "pie"=pie, "data"=data)
+  
+  return(output)
   
 }

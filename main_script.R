@@ -51,7 +51,7 @@ params <- c(phi=phi, selfcure=selfcure, mu=mu, mu_tb=mu_tb
 times  = seq(0, t.intervention, by=1)          # time scale
 
 # Initial conditions
-xstart <- c(U = N-I0,
+xstart <- data.frame(U = N-I0,
             L = 0,
             I = I0,  
             R = 0,
@@ -59,78 +59,57 @@ xstart <- c(U = N-I0,
             Irecent=0 , 
             Iremote=0)               
 
-#Run the model
-out0 <- as.data.frame(ode(y = xstart, times = times, 
-                         func = TB.Basic, parms = params))   #
+fx<-TB.Basic
 
-# Model output
-N       <- out0$U+out0$L+out0$I+out0$R  
-rate.inc<- 1e5*(diff(out0$Incidence)/N[1:length(N)-1])
-fr.remo <- diff(out0$Iremote)/diff(out0$Incidence)
-time    <- out0$time[1:length(out0$time)-1]
+#run the model
+out  <-get_intervention(xstart, params, NA,times, 
+                        NA, NA,fx, "Initial", NA) 
+#plot
+out$lines
 
-# Order in dataframe for plotting
-dat<-data.frame(Years=time+(2019-400), incidence=rate.inc)
-
-#Create plot
-p<- ggplot(data=dat, mapping = aes(x=Years, y=incidence))
-p + 
-  geom_line(col="blue",  size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop')
 
 
 #-----------------------------------------------------------------------
 #2) Can you modify manually the transmission rate per capita to achieve an
 # incidence rate as that of Bangladesh in 2017?  
 #-----------------------------------------------------------------------
-Inc.Bangladesh<- 221
+Inc.country<- 221
 
-dot<-data.frame(Data="Bangladesh",Years=2017, incidence=Inc.Bangladesh)
+params["beta"]<-6.7
 
+#run the model
+out0  <-get_intervention(xstart, params, NA,times, 
+                        NA, NA,fx, "Initial", NA) 
 
-p1<-p + 
-  geom_line(col="blue",  size=1.2) +
-  ggtitle ('TB Incidence') +
-  theme_bw() + ylab('Rate per 100,000 pop') +
+#plot
+dot<-data.frame(Data="Bangladesh",Years=2017, incidence=Inc.country)
+
+p1<-out$lines +
   geom_point(dot, mapping=aes(x=Years, y=incidence, col=Data), size=6, shape=18) 
-  
 
-# Pie of remote incidence in 2017
-df <- data.frame(
-  Source = c("Recent", "Remote"),
-  value  = c(1-tail(fr.remo,1),tail(fr.remo,1))
-)
+grid.arrange(p1,out$pie)
 
-mycols <- c("#0073C2FF", "#EFC000FF")
-pie<- ggplot(df, aes(x="", y=value, fill=Source))+
-  geom_bar(width = 1, stat = "identity") +
-  coord_polar("y", start=0)+
-  scale_fill_manual(values = mycols) +
-  theme_void()+
-  ggtitle ('Baseline') 
-  
-
-grid.arrange(p1,pie, ncol=2, nrow =2)
 
 ########################################################################
 ## Simulation 0
 # Project a baseline
 
 # Prepare for new simulation
-sfin       <- tail(out0,1)     
+sfin       <- tail(out0$out,1)     
 params_new <- params
 params_old <- params
 times_new  <- seq(t.intervention, t.intervention+25 , by=1)
 t.interv   <- c(times_new[2], times_new[2]+t.scale)
 int_name   <- "Baseline"
-fx<-TB.Basic
+
 fx_scale<-function(t, state, parameters) scale_up(t, state, parameters,t.interv,params,fx)
 
 
 data0<-get_intervention(sfin, params_new, params_old,times_new,
-                             t.interv, fx_scale, "Baseline", NA) 
-  
+                             NA, fx_scale,fx, "Baseline", NA) 
+
+grid.arrange(data0$lines ,data0$pie )
+ 
 ########################################################################
 ## Simulation 1
 # An Intervention simulating introduction of treatment
@@ -146,8 +125,16 @@ Tx <-pDx*pTx*(1/(T.cs+T.rTx))
 params_new["selfcure"]<-selfcure + Tx
 
 data1<-get_intervention(sfin, params_new, params_old,times_new,
-                       t.interv, fx_scale, "Treatment", data0) 
+                       t.interv, fx_scale,fx, "Treatment", data0$data) 
 
+p1<-data1$lines +
+  # EndTb
+  geom_hline(yintercept=Inc.country*0.1, linetype="dashed", color = "black", size=1)+
+  # Elimination
+  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
+
+
+grid.arrange(p1 ,data1$pie )
 ########################################################################
 ## Simulation 3
 # An Intervention simulating transm reduction
@@ -156,15 +143,33 @@ data1<-get_intervention(sfin, params_new, params_old,times_new,
 params_new["beta"]<-beta * 0
 
 data2<-get_intervention(sfin, params_new, params_old,times_new,
-                        t.interv, fx_scale, "Transmission", data1) 
+                        t.interv, fx_scale,fx, "Transmission", data1$data) 
+p1<-data2$lines +
+  # EndTb
+  geom_hline(yintercept=Inc.country*0.1, linetype="dashed", color = "black", size=1)+
+  # Elimination
+  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
+
+
+grid.arrange(p1 ,data2$pie )
+
 
 ########################################################################
 ## Simulation 3
 # An Intervention simulating LTBI treatment
 
 # Change parameters for intervention
-params_new["phi"] <-  0.01*(1/T.lfx) 
+params_new["phi"] <-  0.1*(1/T.lfx) 
 
 data3<-get_intervention(sfin, params_new, params_old,times_new,
-                        t.interv, fx_scale, "Transmission", data2) 
+                        t.interv, fx_scale,fx, "Transmission", data2$data) 
+
+p1<-data3$lines +
+  # EndTb
+  geom_hline(yintercept=Inc.country*0.1, linetype="dashed", color = "black", size=1)+
+  # Elimination
+  geom_hline(yintercept=0.1/1e5, linetype="dashed", color = "red", size=1)
+
+
+grid.arrange(p1 ,data3$pie )
 
