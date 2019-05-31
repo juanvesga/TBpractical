@@ -1,12 +1,12 @@
 ---
-title: "TB: exploring the case of Ending TB and TB elimination with a simple compartmental model"
+title: "TB: exploring the case of TB elimination with a simple compartmental model"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-Ending Tuberculosis (TB) and elimination are terms now more present than ever in the Global Health agenda.  Is it achievable? how and when could  this happen?, is yet uncertain, and an ongoing discussion in the field. In this practical, we intend to illustrate important concepts of TB epidemiology by setting up a simple compartmental model and trying to asses what would be required to reach pre-elimination and elimination thresholds. 
+Ending Tuberculosis (TB) and elimination are terms now more present than ever in the Global Health agenda.  Is it achievable? how and when could  this happen?. All this is yet uncertain, and an ongoing discussion in the field. In this practical, we intend to illustrate important concepts of TB epidemiology by setting up a simple compartmental model and trying to asses what would be required to End TB goals as set by WHO and/or elimination thresholds. 
 
 
 ##Core concepts
@@ -27,13 +27,11 @@ The following concepts will be developed further during the practical:
 
 ## Natural History of TB
 
-Briefly, we want to build a model that reflects some imporant facts about the TB time line. 
+Tuberculosis is an infectious disease caused by *Mycobacterium* *tuberculosis*. Pulmonary tuberculosis (PTB) is the most prevalent manifestation of the disease and also the form more likely to be infectious. TB is transmiited from person to person via micro droplets sprayed by an infectious individual when they cough or sneeze. Studies of household contacts and phylogenetic analysis have estimated the transmission potential of the average infectious TB case to be between 4 and 18 secondary cases per year.  
 
-Tuberculosis is an infectious disease caused by *Mycobacterium* *tuberculosis*. Pulmonary tuberculosis (PTB) is the most prevalent manifestation of the disease and also its infectious form. TB is transmiited from person to person via micro droplets sprayed by an infectious individual when they cough. Studies of household contacts and phylogenetic analysis have estimated the transmission potential of the average infectious TB case to be between 4 and 18 secondary cases per year.  
+An important feature in the timeline of TB infection is the latent period. The vast majority of newly infected individuals progress into a latent stage where *M. tuberculosis* remains dormant in a non-replicative stage, and as such, non-infectious. Breaking out from the latent stage into active pulmonary disease is a process mediated by several risk factors, and one that in most cases never realizes. At the population level it is accepted as a broad estimation that 10% of latent infections will break into active disease during a life-span. On the other hand, we also now that ~10% of new TB transmission events will fast-track into active TB disease. Active TB cases, as we discused above, are symptomatic and infectious. Intermediate stages of subclinical active TB are currently recognized, but for simplicity we will accept here that symptomatic disease equals infectiousness.
 
-An important feature in the timeline of TB infection is the latent period. The vast majority of newly infected individuals progress into a latent stage where *M. tuberculosis* remains dormant in a non-replicative stage, and as such, non-infectious. Breaking out from the latent stage into active pulmonary disease is a process mediated by several risk factors, and one that in most cases never realizes. At the population level it is accepted as a broad estmation that 10% of latent infections will break into active disease during a life-span. On the other hand, we also now that ~10% of new TB infections will fast-track into active TB disease. Active TB cases, as we discused above, are symptomatic and infectious. Nevertheless, intermediate stages of subclinical active TB are currently recognized, but for simplicity we will accept that symptomatic disease equals infectiousness.
-
-The average duration of the infectious period is ~3 years. Cohort studies have stablished that after this period roughly 50% of active TB cases die from the disease while the other 50% recover spontaneusly. TB does not confer complete immunity after recovery, but it has been suggested that partial immunity might protect from reinfection  (HR ~0.5). Individuals who had recovered from active TB are not only susceptible for re-infection, but they can relapse into active disease, usually at a yearly rate of around 0.5%.
+The average duration of the infectious period is ~3 years. Cohort studies have established that after this period roughly 50% of active TB cases die from the disease, while the other 50% recover spontaneusly. TB does not confer complete immunity after recovery, however partial immunity has been observed in previously infected and might protect from reinfection  (HR ~0.5). Finally, individuals who had recovered from active TB are not only susceptible for re-infection, but they can relapse into active disease, usually at a yearly rate of around 0.5%.
 
 
 ### Part I: Set up a basic TB model
@@ -127,6 +125,7 @@ TB.Basic <- function (t, state, parameters) {
 ```
 
 
+3) Looking at the model above, can you write down the differential equations for this model?  
 
 
 ```{r include=FALSE}
@@ -167,7 +166,7 @@ TB.Basic <- function (t, state, parameters) {
 
 Now that we have a model coded, and a parameter set, let's run our code and check how TB incidence looks. 
 
-Here, we will create a function that will help us run our model under different conditions and retrn us some plots and data. We will be calling this function repetedly during the practical. 
+But before, we will create a function that will help us run our model under different conditions and will return some plots and data. We will be calling this function repeatedly during the practical. 
 
 *(Note: for this section, copy and paste the code shown and try to understand what is going in each section. Hopefully commenting in the code is transparent enough! )*
 
@@ -192,7 +191,7 @@ get_intervention<- function (sfin, params_new, params_old,times_new,
     fx<-fx_basic
   }  else {
     fx<-fx_scale
-    }
+  }
   
   #Run the model
   out <- as.data.frame(ode(y = xstart, times = times_new, 
@@ -291,18 +290,18 @@ out$lines
   
 We have produced and incidence trajectory for a system that seems to be in endemic equilibrium. What does this mean?  
 
-3) Can you take a moment and try to explain in a few words what it means for an epidemic to achieve an endemic equilibrium?   
+4) Can you take a moment and try to explain in a few words what it means for an epidemic to achieve an endemic equilibrium?   
 
-4) Making use of concepts from your previous lectures, can you think of a simple mathematical expression for the endemic equilibrium in terms of the basic reproduction number ($R_0$) ?     
+5) Making use of concepts from your previous lectures, can you think of a simple mathematical expression for the endemic equilibrium in terms of the basic reproduction number ($R_0$) ?     
 
 ---
 
 
 ####*Answer*
 
-3) Briefly, an epidemic reaches an endemic equilibrium when the average number of secondary infections at time *t* is equal to 1, this is, when the net reproductiion number is equal to one.
+4) Briefly, an epidemic reaches an endemic equilibrium when the average number of secondary infections at time *t* is equal to 1, this is, when the net reproductiion number is equal to one.
 
-4) $R_0*S=1$ , *where S is the fraction of population susceptible at time t*   
+5) $R_0*S=1$ , *where S is the fraction of population susceptible at time t*   
 
 ---
 
@@ -310,7 +309,7 @@ We have produced and incidence trajectory for a system that seems to be in endem
 
 We could attempt to estimate $R_0$ for the given model with a simple rearrange of terms in our previous equation. However, there are factors specific to the natural history of TB that can corrupt our common interpretation of reproduction numbers as we ususally do with acute infections. 
 
-5) Can you think of at least two factors specific to the natural history of TB that can complicate our interpretation of $R_0$ and $R_t$ ?   
+6) Can you think of at least two factors specific to the natural history of TB that can complicate our interpretation of $R_0$ and $R_t$ ?   
 
 
 
@@ -318,7 +317,7 @@ We could attempt to estimate $R_0$ for the given model with a simple rearrange o
 
 ####*Answer*
 
-5) 
+6) 
 * The fact that TB does not confer complete immunity means that even infected individuals are part of the pool of susceptibles at each point in time.  
 
 * A long incubation period (sometimes as long as a life-time) means that the transmission potential described by $R_0$ can hardly reflect  the potential to produce new infectious cases.
@@ -384,6 +383,9 @@ p1<-out$lines +
 
 grid.arrange(p1,out$pie)
 ```
+
+
+4) Can you think of other ways in which the model parameters govern the overall size of the epidemic and in this case the incidence rate at equilibrium? 
 
 To proceed with rolling out the interventions in our model we need a few more steps to get our functions ready to be called when necessary. 
 
@@ -711,6 +713,9 @@ b) Transmission and progression to active TB is known to be stroingly related to
 c) Since MDR-TB is the resulting effect of a wide access to TB drug regimens. As such, incomplete coverage and treatment completion will effectively lead epidemics to transition into higher rates of MDR-TB, making the case of elimination even harder.   
 
 ---
+
+## TO DO: Perhaps include a small excercise of exploration of uncertainty in model parameters and how this could change interpretaion of results? 
+
 
 
 #About this document
