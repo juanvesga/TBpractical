@@ -308,7 +308,7 @@ out$lines
 ```
 
   
-We have produced and incidence trajectory for a system that seems to be in endemic equilibrium. What does this mean?  
+We have produced an incidence trajectory for a system that seems to be in endemic equilibrium. What does this mean?  
 
 
 **4) Can you take a moment and try to explain in a few words what it means for an epidemic to achieve an endemic equilibrium?**  
