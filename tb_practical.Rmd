@@ -437,10 +437,7 @@ First, we need to create a wrapper function that allows us to scale-up our inter
 scale_up<- function (t, state, parameters,t.interv,parameters_old,fx) {
   
   scale <- min((t-t.interv[1])/(t.interv[2]-t.interv[1]),1); 
-  if (scale<0) 
-    {
-    scale=0
-    }
+  scale <- max(0, scale)
   
   pars_scaled <- parameters;
   
